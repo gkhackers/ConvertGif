@@ -15,6 +15,7 @@
 		AF0AB31222256192004121F8 /* ConverterImageFile.swift in Sources */ = {isa = PBXBuildFile; fileRef = AF0AB31122256192004121F8 /* ConverterImageFile.swift */; };
 		AF0AB31822256220004121F8 /* my.gif in Resources */ = {isa = PBXBuildFile; fileRef = AF0AB31622256220004121F8 /* my.gif */; };
 		AF0AB31922256220004121F8 /* your.gif in Resources */ = {isa = PBXBuildFile; fileRef = AF0AB31722256220004121F8 /* your.gif */; };
+		AFEDB22022265C6F000B0491 /* check.gif in Resources */ = {isa = PBXBuildFile; fileRef = AFEDB21F22265C6F000B0491 /* check.gif */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -28,6 +29,7 @@
 		AF0AB31122256192004121F8 /* ConverterImageFile.swift */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.swift; path = ConverterImageFile.swift; sourceTree = "<group>"; };
 		AF0AB31622256220004121F8 /* my.gif */ = {isa = PBXFileReference; lastKnownFileType = image.gif; path = my.gif; sourceTree = "<group>"; };
 		AF0AB31722256220004121F8 /* your.gif */ = {isa = PBXFileReference; lastKnownFileType = image.gif; path = your.gif; sourceTree = "<group>"; };
+		AFEDB21F22265C6F000B0491 /* check.gif */ = {isa = PBXFileReference; lastKnownFileType = image.gif; path = check.gif; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -75,6 +77,7 @@
 		AF0AB31522256216004121F8 /* Resource */ = {
 			isa = PBXGroup;
 			children = (
+				AFEDB21F22265C6F000B0491 /* check.gif */,
 				AF0AB31622256220004121F8 /* my.gif */,
 				AF0AB31722256220004121F8 /* your.gif */,
 			);
@@ -142,6 +145,7 @@
 				AF0AB31822256220004121F8 /* my.gif in Resources */,
 				AF0AB30A22256159004121F8 /* LaunchScreen.storyboard in Resources */,
 				AF0AB31922256220004121F8 /* your.gif in Resources */,
+				AFEDB22022265C6F000B0491 /* check.gif in Resources */,
 				AF0AB30722256159004121F8 /* Assets.xcassets in Resources */,
 				AF0AB30522256158004121F8 /* Main.storyboard in Resources */,
 			);

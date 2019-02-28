@@ -10,81 +10,74 @@ import Foundation
 import AVKit
 
 class Converter {
-    private let fps: Int32 = 30
-    private var imageSize: CGSize = .zero
+    private let fps: Int32 = 600
+    private var imageSize: CGSize = CGSize(width: 10, height: 10)
+    private let fileURL = URL(fileURLWithPath: NSHomeDirectory()).appendingPathComponent("Documents").appendingPathComponent("converted.mp4")
+    
+    private var assetWriter: AVAssetWriter?
+    private var bufferAdaptor: AVAssetWriterInputPixelBufferAdaptor?
+    
+    //MARK: - Public methods
     
     func convertGifFile() {
-        if let gifFile = Bundle.main.url(forResource: "my", withExtension: "gif") {
-            if let imageSource = CGImageSourceCreateWithURL(gifFile as CFURL, nil) {
-                let count = CGImageSourceGetCount(imageSource)
-                var images: [CGImage] = [CGImage]()
-                var delays: [Int] = [Int]()
-                var totalDuration: Int = 0
-                for i in 0 ..< count {
-                    if let image = CGImageSourceCreateImageAtIndex(imageSource, i, [:] as CFDictionary) {
-                        images.append(image)
-                        delays.append(delayCentisecondsForImageAtIndex(source: imageSource, i: Int(i)))
-                    }
-                    totalDuration += delays[i]
-                }
-                
-                let frames = frameArray(images, delays, totalDuration)
-                let duration = TimeInterval(Double(totalDuration)/100.0)
-                if let animatedImage = UIImage.animatedImage(with: frames, duration: duration) {
-                    imageSize = CGSize(width: animatedImage.size.width * 2, height: animatedImage.size.height * 2)
-                    createMP4file(animatedImage, filename: "convertedFile.mp4")
-                }
-            }
-        }
-    }
-    
-    func createMP4file(_ animatedImage: UIImage, filename: String) {
-        guard let images = animatedImage.images else {
+        guard let gifFile = Bundle.main.url(forResource: "check", withExtension: "gif") else {
+            print("No file at bundle.")
             return
         }
         
-        let filePath = URL(fileURLWithPath: NSHomeDirectory()).appendingPathComponent("Documents").appendingPathComponent(filename)
+        guard let imageSource = CGImageSourceCreateWithURL(gifFile as CFURL, nil) else {
+            print("Image Source is not available.")
+            return
+        }
         
-        let _ = try? FileManager.default.removeItem(at: filePath)
+        if let properties = CGImageSourceCopyPropertiesAtIndex(imageSource, 0, nil) {
+            if let propertyDictionary = properties as? [String: AnyObject] {
+                if let width = propertyDictionary[kCGImagePropertyPixelWidth as String] {
+                    imageSize.width = width as! CGFloat
+                }
+                if let height = propertyDictionary[kCGImagePropertyPixelHeight as String] {
+                    imageSize.height = height as! CGFloat
+                }
+            }
+        }
         
-        let fps: Int32 = 30
+        setupControllers(fileURL, size: imageSize)
         
-        let assetWriter = try? AVAssetWriter(url: filePath, fileType: .mov)
-        
-        let assetWriterInput = AVAssetWriterInput(mediaType: .video, outputSettings: [AVVideoCodecKey: AVVideoCodecType.h264, AVVideoWidthKey: NSNumber(value: Int32(imageSize.width)), AVVideoHeightKey: NSNumber(value: Int32(imageSize.height))])
-        
-        let bufferAdaptor = AVAssetWriterInputPixelBufferAdaptor(assetWriterInput: assetWriterInput, sourcePixelBufferAttributes: nil)
-        
-        let success = assetWriter?.canAdd(assetWriterInput)
-        print(success ?? "")
-        
-        assetWriterInput.expectsMediaDataInRealTime = true
-        
-        assetWriter?.add(assetWriterInput)
+        guard let adaptor = bufferAdaptor else {
+            return
+        }
+
+        let count = CGImageSourceGetCount(imageSource)
+        var images: [CGImage] = [CGImage]()
+        var delays: [Int] = [Int]()
+        var totalDuration: Int = 0
+        for i in 0 ..< count {
+            if let image = CGImageSourceCreateImageAtIndex(imageSource, i, [:] as CFDictionary) {
+                images.append(image)
+                delays.append(delayCentisecondsForImageAtIndex(source: imageSource, i: Int(i)))
+            }
+            totalDuration += delays[i]
+        }
         
         assetWriter?.startWriting()
         assetWriter?.startSession(atSourceTime: .zero)
         
-        var buffer: CVPixelBuffer? = nil
-        
-        
-        //convert uiimage to CGImage.
         var frameCount: Int = 0
-        let numberOfSecondsPerFrame: Double = 0.1
-        let frameDuration: Double = Double(fps) * numberOfSecondsPerFrame
+        var presentTime: CMTime = .zero
         
         for img in images {
-            buffer = pixelBuffer(from: img.cgImage)
-            
             var append_ok = false
             var j: Int = 0
             while !append_ok && j < 30 {
-                if bufferAdaptor.assetWriterInput.isReadyForMoreMediaData {
-                    //print out status:
-                    let value = Double(frameCount) * frameDuration
+                if adaptor.assetWriterInput.isReadyForMoreMediaData {
+                    
+                    let delay = Double(delays[frameCount]) / 100
+                    let value = delay * Double(fps)
                     let frameTime: CMTime = CMTimeMake(value: Int64(value), timescale: fps)
-                    if let buffer = buffer {
-                        append_ok = bufferAdaptor.append(buffer, withPresentationTime: frameTime)
+                    presentTime = CMTimeAdd(presentTime, frameTime)
+                    
+                    if let buffer = pixelBuffer(from: img) {
+                        append_ok = adaptor.append(buffer, withPresentationTime: presentTime)
                     }
                     if !append_ok {
                         if let error = assetWriter?.error {
@@ -102,19 +95,49 @@ class Converter {
             }
             frameCount += 1
         }
-        
-        assetWriterInput.markAsFinished()
-        assetWriter?.finishWriting {
-            
-        }
+        assetWriter?.inputs[0].markAsFinished()
+        assetWriter?.finishWriting {}
     }
     
-    func pixelBuffer(from image: CGImage?) -> CVPixelBuffer? {
+    //MARK: - Internal methods
+    private func setupControllers(_ fileURL: URL, size: CGSize) {
+        
+        if FileManager.default.fileExists(atPath: fileURL.path) {
+            do {
+                try FileManager.default.removeItem(at: fileURL)
+            } catch {
+                print(error.localizedDescription)
+                return
+            }
+        }
+        
+        let assetWriter = try? AVAssetWriter(url: fileURL, fileType: .mov)
+        
+        let assetWriterInput = AVAssetWriterInput(mediaType: .video,
+                                                  outputSettings: [AVVideoCodecKey: AVVideoCodecType.h264,
+                                                                   AVVideoWidthKey: NSNumber(value: Int32(size.width)),
+                                                                   AVVideoHeightKey: NSNumber(value: Int32(size.height)),
+                                                                   AVVideoCompressionPropertiesKey: [AVVideoAverageBitRateKey: Int(640000)]])
+        
+        let bufferAdaptor = AVAssetWriterInputPixelBufferAdaptor(assetWriterInput: assetWriterInput, sourcePixelBufferAttributes: nil)
+        
+        let _ = assetWriter?.canAdd(assetWriterInput)
+        
+        assetWriterInput.expectsMediaDataInRealTime = true
+        
+        assetWriter?.add(assetWriterInput)
+        
+        self.assetWriter = assetWriter
+        self.bufferAdaptor = bufferAdaptor
+    }
+
+    private func pixelBuffer(from image: CGImage?) -> CVPixelBuffer? {
         guard let image = image else {return nil}
         
         let options = [
-            kCVPixelBufferCGImageCompatibilityKey : NSNumber(value: true),
-            kCVPixelBufferCGBitmapContextCompatibilityKey : NSNumber(value: true)
+            kCVPixelBufferCGImageCompatibilityKey : kCFBooleanTrue,
+            kCVPixelBufferCGBitmapContextCompatibilityKey : kCFBooleanTrue,
+            
             ] as CFDictionary
         
         var pxbuffer: CVPixelBuffer? = nil
@@ -134,10 +157,16 @@ class Converter {
         let rgbColorSpace = CGColorSpaceCreateDeviceRGB()
         let bitmapInfo = CGBitmapInfo(rawValue: CGImageAlphaInfo.premultipliedFirst.rawValue)
         
-        if let context = CGContext(data: pxdata, width: Int(imageSize.width), height: Int(imageSize.height), bitsPerComponent: 8, bytesPerRow: Int(4 * imageSize.width), space: rgbColorSpace, bitmapInfo: UInt32(bitmapInfo.rawValue)) {
+        if let context = CGContext(data: pxdata, width: Int(imageSize.width),
+                                   height: Int(imageSize.height),
+                                   bitsPerComponent: 8,
+                                   bytesPerRow: CVPixelBufferGetBytesPerRow(pixelBuffer),
+                                   space: rgbColorSpace,
+                                   bitmapInfo: UInt32(bitmapInfo.rawValue)) {
             context.concatenate(CGAffineTransform(rotationAngle: 0))
-            context.draw(image, in: CGRect(x: 0, y: 0, width: image.width, height: image.height))
+            context.draw(image, in: CGRect(x: 0, y: 0, width: Int(imageSize.width), height: Int(imageSize.height)))
         }
+        
         CVPixelBufferUnlockBaseAddress(pixelBuffer, [])
         
         return pxbuffer
